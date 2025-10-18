@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADMIN PANEL</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { color: #dc3545; }
+        #live-results { margin-top: 20px; }
+        .candidate { margin: 10px 0; font-size: 1.2rem; }
+        #reveal-button {
+            background-color: #dc3545; color: white; padding: 15px;
+            font-size: 1.5rem; cursor: pointer; border: none; border-radius: 5px;
+            margin-top: 30px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <p>You MUST be logged in (with your Google account) in the main app in this browser for this to work.</p>
+    
+    <div id="live-results">
+        <h2>Live Vote Count</h2>
+        <div id="candidates-container">Loading...</div>
+    </div>
+
+    <button id="reveal-button">!!! REVEAL WINNER TO ALL USERS !!!</button>
+    
+    <script src="js/admin.js"></script>
+</body>
+</html>
