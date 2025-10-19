@@ -205,7 +205,7 @@ async function checkWinnerNow() {
             .select('winner_revealed, winner_id')
             .eq('id', 1)
             // The cache buster: id is not equal to a random new timestamp
-            .neq('id', new Date().getTime()) 
+            .neq('id', Math.floor(Math.random() * 1000000))
             .single();
 
         if (error) {
