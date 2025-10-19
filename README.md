@@ -2,7 +2,7 @@
 
 A real-time fan voting application built with plain HTML/CSS/JS and a Supabase backend. This project allows users to log in with Google to cast a single, secure vote. A designated admin can monitor the votes live, reveal the winner to all users, and reset the entire poll.
 
-**Live Demo:** [[[https://fan-voting-system.onrender.com](https://fan-voting-system.onrender.com)]]
+**Live Demo:** [https://fan-voting-system.onrender.com](https://fan-voting-system.onrender.com)
 
 
 ## Features
