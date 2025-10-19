@@ -19,7 +19,7 @@ body {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 button {
@@ -63,3 +63,16 @@ button:hover {
 #winner-name {
     color: #28a745;
 }
+
+#admin-button {
+    background-color: #6c757d; 
+    margin-left: 10px; 
+}
+#admin-button:hover {
+    background-color: #5a6268;
+}
+
+#user-info button {
+    display: inline-block;
+}
+

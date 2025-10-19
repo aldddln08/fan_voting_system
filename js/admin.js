@@ -1,10 +1,10 @@
-// Use the SAME Supabase credentials as app.js
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://oxsqjmwskfsfiytzxyvd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94c3FqbXdza2ZzZml5dHp4eXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3Nzc4NTUsImV4cCI6MjA3NjM1Mzg1NX0.2Q8IEjbeKBjomJQ2C_SXa2SbPa1ldX-dJAEliSxOEHc';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const candidatesContainer = document.getElementById('candidates-container');
 const revealButton = document.getElementById('reveal-button');
+const resetAllButton = document.getElementById('reset-all-button');
 
 let currentCandidates = []; // Store current vote counts
 
@@ -35,27 +35,6 @@ function updateVotesUI(candidates) {
     }
 }
 
-// 3. Listen for REAL-TIME changes to the votes
-supabase
-    .channel('public:candidates')
-    .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'candidates' },
-        (payload) => {
-            console.log('Vote received!', payload);
-            // Find and update the candidate in our local list
-            const updatedCandidate = payload.new;
-            const index = currentCandidates.findIndex(c => c.id === updatedCandidate.id);
-            if (index !== -1) {
-                currentCandidates[index] = updatedCandidate;
-            } else {
-                currentCandidates.push(updatedCandidate);
-            }
-            // Re-sort and update UI
-            currentCandidates.sort((a, b) => b.vote_count - a.vote_count);
-            updateVotesUI(currentCandidates);
-        }
-    )
-    .subscribe();
 
 // 4. Handle the "Reveal Winner" button
 revealButton.addEventListener('click', async () => {
@@ -87,5 +66,42 @@ revealButton.addEventListener('click', async () => {
     }
 });
 
+resetAllButton.addEventListener('click', async () => {
+    // Add two confirmations because this is very destructive
+    if (!confirm('ARE YOU 100% SURE? This will delete all votes and reset the entire system. This cannot be undone.')) {
+        return;
+    }
+    if (!confirm('SECOND CONFIRMATION: Are you absolutely sure?')) {
+        return;
+    }
+
+    console.log("Calling reset_all_votes function...");
+
+    // Call the new function we just created
+    const { error } = await supabase.rpc('reset_all_votes');
+
+    if (error) {
+        console.error(error);
+        alert('Error resetting votes: ' + error.message);
+    } else {
+        alert('SUCCESS: All votes have been reset.');
+
+        // Manually refresh the vote counts on the admin page
+        fetchVotes(); 
+
+        // Also re-enable the reveal button
+        revealButton.disabled = false;
+        revealButton.textContent = '!!! REVEAL WINNER TO ALL USERS !!!';
+    }
+});
+
 // Initial load
-fetchVotes();
+function startVotePolling() {
+    console.log("Polling for new votes...");
+    fetchVotes(); // Call it once immediately
+    
+    // Then call it again every 3 seconds
+    setInterval(fetchVotes, 3000); // 3000ms = 3 seconds
+}
+
+startVotePolling();

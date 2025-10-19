@@ -10,9 +10,19 @@
         #live-results { margin-top: 20px; }
         .candidate { margin: 10px 0; font-size: 1.2rem; }
         #reveal-button {
-            background-color: #dc3545; color: white; padding: 15px;
+            background-color: #28a745; color: white; padding: 15px;
             font-size: 1.5rem; cursor: pointer; border: none; border-radius: 5px;
             margin-top: 30px;
+        }
+        #reset-all-button {
+            background-color: #dc3545; /* Red */
+            color: white;
+            padding: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            border: none;
+        border-radius: 5px;
+        margin-top: 10px;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -27,6 +37,8 @@
     </div>
 
     <button id="reveal-button">!!! REVEAL WINNER TO ALL USERS !!!</button>
+
+    <button id="reset-all-button">!!! RESET ALL VOTES !!!</button>
     
     <script src="js/admin.js"></script>
 </body>

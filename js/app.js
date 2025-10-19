@@ -1,11 +1,10 @@
-// 1. SUPABASE CLIENT INITIALIZATION
-// Get these from your Supabase project's "API Settings"
+// Supabase Client Initialization
 const SUPABASE_URL = 'https://oxsqjmwskfsfiytzxyvd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94c3FqbXdza2ZzZml5dHp4eXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3Nzc4NTUsImV4cCI6MjA3NjM1Mzg1NX0.2Q8IEjbeKBjomJQ2C_SXa2SbPa1ldX-dJAEliSxOEHc';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 2. DOM ELEMENTS
+// Dom Elements
 const loginScreen = document.getElementById('login-screen');
 const loadingScreen = document.getElementById('loading-screen');
 const userInfo = document.getElementById('user-info');
@@ -16,10 +15,13 @@ const winnerScreen = document.getElementById('winner-screen');
 const loginButton = document.getElementById('login-button');
 const logoutButton = document.getElementById('logout-button');
 const userEmail = document.getElementById('user-email');
+const adminButton = document.getElementById('admin-button');
 const candidatesList = document.getElementById('candidates-list');
 const winnerName = document.getElementById('winner-name');
 
-// 3. AUTHENTICATION
+let winnerPoller = null;
+
+// Auth
 loginButton.addEventListener('click', () => {
     supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -27,11 +29,17 @@ loginButton.addEventListener('click', () => {
 });
 
 logoutButton.addEventListener('click', () => {
+    if (winnerPoller) {
+        clearInterval(winnerPoller);
+    }
     supabase.auth.signOut();
 });
 
-// 4. MAIN APP LOGIC
-// This function checks the session and routes the user
+adminButton.addEventListener('click', () => {
+    window.open('admin.html', '_blank');
+});
+
+// Session and routes of the user
 async function checkSession() {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -39,12 +47,12 @@ async function checkSession() {
         showScreen('login');
     } else {
         userEmail.textContent = session.user.email;
-        showScreen('loading'); // Show loading while we fetch app state
+        showScreen('loading');
         await loadAppState(session.user);
     }
 }
 
-// Check for auth changes (login/logout)
+// Login and Logout
 supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') {
         userEmail.textContent = session.user.email;
@@ -55,9 +63,9 @@ supabase.auth.onAuthStateChange((event, session) => {
     }
 });
 
-// This is the main router for the UI
+// App state for the user's UI
 async function loadAppState(user) {
-    // 1. Check the global app_state table
+    // app_state table in supabase
     const { data: state, error: stateError } = await supabase
         .from('app_state')
         .select('*')
@@ -69,31 +77,50 @@ async function loadAppState(user) {
         return;
     }
 
-    // CASE 1: Winner has been revealed
+    // Winner has been revealed
     if (state.winner_revealed) {
         await showWinner(state.winner_id);
     } 
-    // CASE 2: Voting is still open
+    // Voting is still open
     else {
-        // Check if this specific user has voted
+        // Check user's voting status AND role in one call
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('has_voted')
+            .select('has_voted, role')
             .eq('id', user.id)
             .single();
 
-        // This handles new users who don't have a profile row yet
+        // Admin button visibility
+        if (profile && profile.role === 'admin') {
+            adminButton.classList.remove('hidden');
+        } else {
+            adminButton.classList.add('hidden');
+        }
+
+        // For new users without a profile
         if (profileError && profileError.code === 'PGRST116') {
-            // No profile found, let's create one
-            await supabase.from('profiles').insert({ id: user.id, has_voted: false });
-            showScreen('voting');
-            await loadCandidates();
-        } 
-        // CASE 2a: User has already voted
+
+            const { error: upsertError } = await supabase.from('profiles').upsert({ 
+              id: user.id, 
+              email: user.email,
+              has_voted: false, // Has not yet voted
+              role: 'user',
+              name: user.user_metadata.full_name
+            });
+
+            if (upsertError) {
+              console.error("Error creating profile:", upsertError);
+            } else {
+              showScreen('voting');
+              await loadCandidates();
+            }
+        }
+        // User has already voted
         else if (profile && profile.has_voted) {
             showScreen('waiting');
-        } 
-        // CASE 2b: User has not voted
+            startPollingForWinner();
+        }
+        // User has not voted
         else {
             showScreen('voting');
             await loadCandidates();
@@ -157,25 +184,34 @@ async function handleVote(candidateId) {
     }
 }
 
-// 5. REAL-TIME LISTENER
-// This listens for the admin revealing the winner
-supabase
-    .channel('public:app_state')
-    .on('postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.1' },
-        (payload) => {
-            console.log('App state changed!', payload);
-            const newState = payload.new;
-            if (newState.winner_revealed) {
-                // The admin just revealed the winner!
-                showWinner(newState.winner_id);
-            }
+// POLLING FUNCTION (Replaces Real-time)
+function startPollingForWinner() {
+    // Clear any old pollers just in case
+    if (winnerPoller) {
+        clearInterval(winnerPoller);
+    }
+    
+    console.log("Starting to poll for winner...");
+
+    // Check for the winner every 5 seconds
+    winnerPoller = setInterval(async () => {
+        console.log("Polling...");
+        const { data: state, error } = await supabase
+            .from('app_state')
+            .select('winner_revealed, winner_id')
+            .eq('id', 1)
+            .single();
+
+        if (state && state.winner_revealed) {
+            console.log("Winner found!");
+            clearInterval(winnerPoller); // Stop polling
+            await showWinner(state.winner_id);
         }
-    )
-    .subscribe();
+    }, 5000); // 5000ms
+}
 
 
-// 6. HELPER FUNCTION to manage UI
+// HELPER FUNCTION to manage UI
 function showScreen(screenName) {
     // Hide all screens
     loginScreen.classList.add('hidden');
@@ -195,5 +231,5 @@ function showScreen(screenName) {
     }
 }
 
-// 7. INITIALIZE
+// Initialize
 checkSession();
