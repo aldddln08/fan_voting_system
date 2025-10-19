@@ -83,6 +83,7 @@ async function loadAppState(user) {
     } 
     // Voting is still open
     else {
+        startPollingForWinner();
         // Check user's voting status AND role in one call
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -118,7 +119,6 @@ async function loadAppState(user) {
         // User has already voted
         else if (profile && profile.has_voted) {
             showScreen('waiting');
-            startPollingForWinner();
         }
         // User has not voted
         else {
@@ -192,22 +192,40 @@ function startPollingForWinner() {
     }
     
     console.log("Starting to poll for winner...");
+    checkWinnerNow();
 
-    // Check for the winner every 5 seconds
-    winnerPoller = setInterval(async () => {
-        console.log("Polling...");
+    // Check for the winner every 3 seconds
+    winnerPoller = setInterval(checkWinnerNow, 3000);
+}
+
+async function checkWinnerNow() {
+    try {
+        console.log("Checking for winner...");
+        
+        // This makes the request unique every time to bypass the cache.
         const { data: state, error } = await supabase
             .from('app_state')
             .select('winner_revealed, winner_id')
             .eq('id', 1)
+            // The cache buster: id is not equal to a random new timestamp
+            .neq('id', new Date().getTime()) 
             .single();
+
+        if (error) {
+            console.error("Error polling for winner:", error.message);
+            return; // Try again next time
+        }
 
         if (state && state.winner_revealed) {
             console.log("Winner found!");
-            clearInterval(winnerPoller); // Stop polling
+            if (winnerPoller) {
+                clearInterval(winnerPoller);
+            }
             await showWinner(state.winner_id);
         }
-    }, 5000); // 5000ms
+    } catch (e) {
+        console.error("Critical error in poller:", e);
+    }
 }
 
 
