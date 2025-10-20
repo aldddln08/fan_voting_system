@@ -61,8 +61,50 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 // App state for the user's UI
+// App state for the user's UI
 async function loadAppState(user) {
-    // app_state table in supabase
+
+    // We must check for the profile *first* to see if they are an admin or a new user.
+    let profile; 
+
+    const { data: dbProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('has_voted, role')
+        .eq('id', user.id)
+        .single();
+
+    if (profileError && profileError.code === 'PGRST116') {
+        // This is a new user, create their profile
+        console.log("New user detected, creating profile...");
+        const { error: upsertError } = await supabase.from('profiles').upsert({ 
+            id: user.id, 
+            email: user.email,
+            has_voted: false, // Has not yet voted
+            role: 'user',
+            name: user.user_metadata.full_name
+        });
+
+        if (upsertError) {
+            console.error("Error creating profile:", upsertError);
+            return;
+        }
+        profile = { has_voted: false, role: 'user' };
+
+    } else if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        return;
+    } else {
+        profile = dbProfile;
+    }
+
+    // We can safely check the role.
+    if (profile && profile.role === 'admin') {
+        adminButton.classList.remove('hidden');
+    } else {
+        adminButton.classList.add('hidden');
+    }
+    
+    // Now we check the poll state to see which screen to show
     const { data: state, error: stateError } = await supabase
         .from('app_state')
         .select('*')
@@ -74,51 +116,18 @@ async function loadAppState(user) {
         return;
     }
 
-    // Winner has been revealed
     if (state.winner_revealed) {
+        // Winner has been revealed
+        if (winnerPoller) clearInterval(winnerPoller); // Stop polling
         await showWinner(state.winner_id);
     } 
-    // Voting is still open
     else {
+        // Voting is still open
         startPollingForWinner();
-        // Check user's voting status AND role in one call
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('has_voted, role')
-            .eq('id', user.id)
-            .single();
 
-        // Admin button visibility
-        if (profile && profile.role === 'admin') {
-            adminButton.classList.remove('hidden');
-        } else {
-            adminButton.classList.add('hidden');
-        }
-
-        // For new users without a profile
-        if (profileError && profileError.code === 'PGRST116') {
-
-            const { error: upsertError } = await supabase.from('profiles').upsert({ 
-              id: user.id, 
-              email: user.email,
-              has_voted: false, // Has not yet voted
-              role: 'user',
-              name: user.user_metadata.full_name
-            });
-
-            if (upsertError) {
-              console.error("Error creating profile:", upsertError);
-            } else {
-              showScreen('voting');
-              await loadCandidates();
-            }
-        }
-        // User has already voted
-        else if (profile && profile.has_voted) {
+        if (profile.has_voted) {
             showScreen('waiting');
-        }
-        // User has not voted
-        else {
+        } else {
             showScreen('voting');
             await loadCandidates();
         }
